@@ -36,14 +36,8 @@
 (defvar my:ws-butler-global-exempt-modes
   '(markdown-mode ein:notebook-multilang-mode))
 
-;; TEX is installed in a different location on macOS
-(when (string-equal system-type "darwin") ;; "windows-nt"
-  (setenv "PATH" (concat (getenv "PATH") ":/Library/TeX/texbin/"))
-  (setq exec-path (append exec-path '("/Library/TeX/texbin/")))
-  (setenv "PATH" (concat (getenv "PATH") ":/usr/local/bin")))
-
 ;; Set font size. Font size is set to my:font-size/10
-(defvar my:font-size 115)
+(defvar my:font-size 120)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Set packages to install
@@ -181,21 +175,19 @@
   :commands use-package-autoload-keymap)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; download emacs doom themes
+;; download emacs doom themes & activate doom-vibrant
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defvar my:use-theme 'doom-vibrant)
 (use-package doom-themes
  :ensure t
  :config
  ;; Global settings (defaults)
-
  ;; if nil, bold is universally disabled
  (setq doom-themes-enable-bold t)
  ;; if nil, italics is universally disabled
  (setq doom-themes-enable-italic t)
  ;; Load the selected theme
  (load-theme my:use-theme t)
-
  (require 'doom-themes-ext-org)
  ;; Corrects (and improves) org-mode's native fontification.
  (doom-themes-org-config)
@@ -239,7 +231,8 @@
       (evil-collection-init)
       )
 
-    ))
+        )
+)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; ESS :: to plug into R
@@ -247,31 +240,33 @@
 (use-package ess
  :ensure t
  :init
- (require 'ess-site)
  (require 'ess-r-mode)
  :config
  (setq ess-eval-visibly 'nowait) ; emacs continues while R executes
- (setq ess-use-auto-complete t)
- (dolist (map (list ess-mode-map inferior-ess-mode-map))
-  (define-key map (kbd "M-1") 'ess-insert-assign))
- (ess-toggle-underscore nil)
- (defun then_R_operator ()
-  "R - %>% operator or 'then' pipe operator"
-  (interactive)
-  (just-one-space 1)
-  (insert "%>%")
-  (reindent-then-newline-and-indent))
- (define-key ess-mode-map (kbd "M-2") 'then_R_operator)
- (define-key inferior-ess-mode-map (kbd "M-2") 'then_R_operator)
+ (setq ess-use-company 'script-only)
+ ;; (setq ess-display-help-in-browser nil)
+ ;; (setq ess-help-own-frame 'one)
  )
 
+(dolist (map (list ess-mode-map inferior-ess-mode-map))
+ (define-key map (kbd "M-1") 'ess-insert-assign))
+        (ess-toggle-underscore nil)
+(defun then_R_operator ()
+ "R - %>% operator or 'then' pipe operator"
+ (interactive)
+ (just-one-space 1)
+ (insert "%>%")
+ (reindent-then-newline-and-indent))
+        (define-key ess-mode-map (kbd "M-2") 'then_R_operator)
+        (define-key inferior-ess-mode-map (kbd "M-2") 'then_R_operator)
+
 (defun apply-r-func-at-point (func)
-    "Apply R FUNC at point, FUNC should be a string."
-    (let ((sym (ess-symbol-at-point)))
-    (if sym
-        (ess-send-string (get-buffer-process "*R:R*")
-                         (concat  func "(" (symbol-name sym) ")\n") t)
-      (message "No valid R symbol at point"))))
+ "Apply R FUNC at point, FUNC should be a string."
+ (let ((sym (ess-symbol-at-point)))
+  (if sym
+   (ess-send-string (get-buffer-process "*R*")
+    (concat  func "(" (symbol-name sym) ")\n") t)
+   (message "No valid R symbol at point"))))
 
 (defun r-summary-at-point ()
   (interactive) (apply-r-func-at-point "summary"))
@@ -312,53 +307,6 @@
 (defun r-str-at-point ()
   (interactive)     (apply-r-func-at-point "str"))
 (evil-define-key 'normal ess-mode-map (kbd ";r") 'r-str-at-point)
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; s is used by origami, etc and sometimes during Emacs
-;; upgrades disappears so we try to install it on its own.
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(use-package s
-  :ensure t)
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Automatically compile and save ~/.emacs.el
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(when my:byte-compile-init
-  (defun byte-compile-init-files (file)
-    "Automatically compile FILE."
-    (interactive)
-    (save-restriction
-      ;; Suppress the warning when you setq an undefined variable.
-      (if (>= emacs-major-version 23)
-          (setq byte-compile-warnings '(not free-vars obsolete))
-        (setq byte-compile-warnings
-              '(unresolved
-                callargs
-                redefine
-                obsolete
-                noruntime
-                cl-warnings
-                interactive-only)))
-      (byte-compile-file (expand-file-name file))))
-
-  ;; Add a post-save hook that checks if ~/.emacs.el exists and if the file
-  ;; name of the current buffer is ~/.emacs.el or the symbolically linked
-  ;; file.
-  (add-hook
-   'after-save-hook
-   (function
-    (lambda ()
-      (when (and (string= (file-truename "~/.emacs.el")
-                          (file-truename (buffer-file-name)))
-                 (file-exists-p "~/.emacs.el"))
-        (byte-compile-init-files "~/.emacs.el")))))
-
-  ;; Byte-compile again to ~/.emacs.elc if it is outdated. We use file-truename
-  ;; to follow symbolic links so that ~/.emacs.el can be symbolically linked to
-  ;; the location where the .emacs.el is stored.
-  (when (file-newer-than-file-p
-         (file-truename "~/.emacs.el")
-         (file-truename "~/.emacs.elc"))
-    (byte-compile-init-files "~/.emacs.el")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; auto-package-update
@@ -410,6 +358,47 @@
 (use-package all-the-icons
   :ensure t)
 
+;; Change tab key behavior to insert spaces instead
+(setq-default indent-tabs-mode nil)
+
+;; Set the number of spaces that the tab key inserts (usually 2 or 4)
+(setq c-basic-offset 2)
+;; Set the size that a tab CHARACTER is interpreted as
+;; (unnecessary if there are no tab characters in the file!)
+(setq tab-width 2)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Set up code completion with company
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(use-package company
+  :ensure t
+  :diminish company-mode
+  :config
+  ;; Zero delay when pressing tab
+  (setq company-idle-delay 0)
+  (add-hook 'after-init-hook 'global-company-mode)
+  (with-eval-after-load 'company
+   (define-key company-active-map (kbd "<return>") nil)
+   (define-key company-active-map (kbd "RET") nil)
+   (define-key company-active-map (kbd "C-SPC") #'company-complete-selection))
+  ;; remove unused backends
+  (setq company-backends (delete 'company-eclim company-backends))
+  (setq company-backends (delete 'company-bbdb company-backends))
+  (setq company-backends (delete 'company-oddmuse company-backends))
+  )
+
+;; Use prescient for sorting results with company:
+;; https://github.com/raxod502/prescient.el
+(when my:use-prescient
+  (use-package company-prescient
+    :ensure t
+    :after company
+    :config
+    (company-prescient-mode t)
+    (prescient-persist-mode t)
+    )
+  )
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Select search backend
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -447,433 +436,6 @@
     (ctrlf-mode t))
   )
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Origami - Does code folding, ie hide the body of an
-;; if/else/for/function so that you can fit more code on your screen
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(use-package origami
-  :ensure t
-  :commands (origami-mode)
-  :bind (:map origami-mode-map
-              ("C-c o :" . origami-recursively-toggle-node)
-              ("C-c o a" . origami-toggle-all-nodes)
-              ("C-c o t" . origami-toggle-node)
-              ("C-c o o" . origami-show-only-node)
-              ("C-c o u" . origami-undo)
-              ("C-c o U" . origami-redo)
-              ("C-c o C-r" . origami-reset)
-              )
-  :config
-  (setq origami-show-fold-header t)
-  ;; The python parser currently doesn't fold if/for/etc. blocks, which is
-  ;; something we want. However, the basic indentation parser does support
-  ;; this with one caveat: you must toggle the node when your cursor is on
-  ;; the line of the if/for/etc. statement you want to collapse. You cannot
-  ;; fold the statement by toggling in the body of the if/for/etc.
-  (add-to-list 'origami-parser-alist '(python-mode . origami-indent-parser))
-  :init
-  (add-hook 'prog-mode-hook 'origami-mode)
-  )
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Rainbow Delimiters -  have delimiters be colored by their depth
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(use-package rainbow-delimiters
-  :ensure t
-  :init
-  (eval-when-compile
-    ;; Silence missing function warnings
-    (declare-function rainbow-delimiters-mode "rainbow-delimiters.el"))
-  (add-hook 'prog-mode-hook #'rainbow-delimiters-mode))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Beacon-mode: flash the cursor when switching buffers or scrolling
-;;              the goal is to make it easy to find the cursor
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(use-package beacon
-  :ensure t
-  :diminish beacon-mode
-  :init
-  (eval-when-compile
-    ;; Silence missing function warnings
-    (declare-function beacon-mode "beacon.el"))
-  :config
-  (beacon-mode t))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; which-key: when you pause on a keyboard shortcut it provides
-;;            suggestions in a popup buffer
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(use-package which-key
-  :ensure t
-  :diminish which-key-mode
-  :init
-  (eval-when-compile
-    ;; Silence missing function warnings
-    (declare-function which-key-mode "which-key.el"))
-  :config
-  (which-key-mode))
-
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Use undo-tree to navigate undo history
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(use-package undo-tree
-  :ensure t
-  :diminish undo-tree-mode
-  :defer 1
-  :config
-  (eval-when-compile
-    ;; Silence missing function warnings
-    (declare-function global-undo-tree-mode "undo-tree.el"))
-  (global-undo-tree-mode))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; visual-regexp-steroids
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(use-package visual-regexp-steroids
-  :ensure t
-  :bind (("C-c v r" . vr/query-replace)
-         ("M-%" . vr/query-replace)
-         ("C-c v m" . vr/mc-mark)
-         ("C-M-s" . vr/isearch-forward)
-         ("C-M-r" . vr/isearch-backward))
-  )
-
-;; Change tab key behavior to insert spaces instead
-(setq-default indent-tabs-mode nil)
-
-;; Set the number of spaces that the tab key inserts (usually 2 or 4)
-(setq c-basic-offset 2)
-;; Set the size that a tab CHARACTER is interpreted as
-;; (unnecessary if there are no tab characters in the file!)
-(setq tab-width 2)
-
-;; We want to be able to see if there is a tab character vs a space.
-;; global-whitespace-mode allows us to do just that.
-;; Set whitespace mode to only show tabs, not newlines/spaces.
-(use-package whitespace
-  :ensure t
-  :diminish global-whitespace-mode
-  :diminish whitespace-mode
-  :init
-  (eval-when-compile
-      ;; Silence missing function warnings
-      (declare-function global-whitespace-mode "whitespace.el"))
-  :config
-  (setq whitespace-style '(face lines-tail trailing tabs tab-mark))
-  )
-
-;; Turn on whitespace mode globally except in magit-mode
-(define-global-minor-mode my-global-whitespace-mode whitespace-mode
-  (lambda ()
-    (let* ((allow-ws-mode t))
-      (progn
-        (dolist (element my:ws-disable-modes)
-          (when (derived-mode-p element)
-            (setq allow-ws-mode nil)
-            )
-          )
-        (when allow-ws-mode
-          (whitespace-mode t))))
-    ))
-(my-global-whitespace-mode t)
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Package: lsp (language server protocol mode)
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; A code completion, syntax checker, etc. engine that uses the LSP to
-;; talk to completion servers.
-;; https://github.com/emacs-lsp/lsp-mode
-(use-package lsp-mode
-  :ensure t
-  :hook (;; Python on Linux/mac OS is pyls (python language server)
-         (python-mode . lsp)
-         ;; Rust RLS (Rust Language Server) https://github.com/rust-lang/rls
-         (rust-mode . lsp)
-         ;; Bash uses bash-language-server
-         ;; https://github.com/mads-hartmann/bash-language-server
-         (shell-mode . lsp)
-         )
-  :init
-  ;; Disable yasnippet. We re-enable when yasnippet is loaded.
-  (defvar lsp-enable-snippet nil)
-  (use-package lsp-ui
-    :ensure t
-    :after lsp-mode
-    :hook (lsp-mode . lsp-ui-mode)
-    :config
-    ;; Set useful keybindings
-    (local-set-key (kbd "C-c y l") 'lsp-ui-flycheck-list)
-    (local-set-key (kbd "C-c y i") 'lsp-ui-imenu)
-
-    ;; Use find references and definitions key bindings instead of CTags.
-    (defun set-local-keybinds-lsp-ui ()
-      "Sets keybindings for lsp mode"
-      (interactive)
-      (local-set-key (kbd "M-.") 'lsp-ui-peek-find-definitions)
-      (local-set-key (kbd "M-?") 'lsp-ui-peek-find-references)
-      )
-    (add-hook 'c-mode-common-hook 'set-local-keybinds-lsp-ui)
-    (add-hook 'python-mode-hook 'set-local-keybinds-lsp-ui)
-    (add-hook 'rust-mode-hook 'set-local-keybinds-lsp-ui)
-    (add-hook 'shell-mode-hook 'set-local-keybinds-lsp-ui)
-    )
-
-  (use-package company-lsp
-    :ensure t
-    :diminish
-    :after (company lsp-mode)
-    :init
-    (defvar company-lsp-enable-recompletion t)
-    (defvar company-lsp-async t)
-    :config (add-to-list 'company-backends 'company-lsp))
-
-  :config
-  ;; Set GC threshold to 25MB since LSP mode is very memory hungry and
-  ;; produces a lot of garbage
-  (setq gc-cons-threshold 25000000)
-
-  ;; Increase the amount of data which Emacs reads from the process. The emacs
-  ;; default is too low 4k considering that the some of the language server
-  ;; responses are in 800k - 3M range. Set to 1MB
-  (setq read-process-output-max (* 1024 1024))
-
-  ;; Extra flags passed to clangd. See 'clangd --help' for info
-  (defvar lsp-clients-clangd-args '("--clang-tidy"
-                                    "--fallback-style=google"
-                                    "-j=4"
-                                    "--suggest-missing-includes"
-                                    "--pch-storage=memory"))
-  (setq lsp-enable-on-type-formatting nil)
-  ;; (setq lsp-before-save-edits nil)
-  ;; Use flycheck instead of flymake
-  (setq lsp-prefer-flymake nil)
-
-  ;; Set keybindings
-  (local-set-key (kbd "C-c y n") 'lsp-rename)
-  (local-set-key (kbd "C-c y o") 'lsp-restart-workspace)
-  (local-set-key (kbd "C-c y c") 'lsp-disconnect)
-  (local-set-key (kbd "C-c f") 'lsp-format-region)
-  )
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Set up code completion with company
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(use-package company
-  :ensure t
-  :diminish company-mode
-  :config
-  ;; Zero delay when pressing tab
-  (setq company-idle-delay 0)
-  (add-hook 'after-init-hook 'global-company-mode)
-  ;; remove unused backends
-  (setq company-backends (delete 'company-semantic company-backends))
-  (setq company-backends (delete 'company-eclim company-backends))
-  (setq company-backends (delete 'company-xcode company-backends))
-  (setq company-backends (delete 'company-clang company-backends))
-  (setq company-backends (delete 'company-bbdb company-backends))
-  (setq company-backends (delete 'company-oddmuse company-backends))
-  )
-
-;; Use prescient for sorting results with company:
-;; https://github.com/raxod502/prescient.el
-(when my:use-prescient
-  (use-package company-prescient
-    :ensure t
-    :after company
-    :config
-    (company-prescient-mode t)
-    (prescient-persist-mode t)
-    )
-  )
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Add icons to code completion when using the GUI client.
-;; https://github.com/sebastiencs/company-box/
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(use-package company-box
-  :ensure t
-  :hook (company-mode . company-box-mode))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Org-Mode
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(setq org-log-done 'time
-      org-todo-keywords '((sequence "TODO" "INPROGRESS" "DONE"))
-      org-todo-keyword-faces '(("INPROGRESS" .
-                                (:foreground "blue" :weight bold))))
-(use-package writegood-mode
-  :ensure t
-  :init
-  (eval-when-compile
-    ;; Silence missing function warnings
-    (declare-function writegood-mode "writegood-mode.el"))
-  (add-hook 'org-mode-hook #'writegood-mode)
-  )
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; autopair
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Automatically at closing brace, bracket and quote
-(use-package autopair
-  :ensure t
-  :diminish autopair-mode
-  :init
-  (eval-when-compile
-    ;; Silence missing function warnings
-    (declare-function autopair-global-mode "autopair.el"))
-  :config
-  (autopair-global-mode t)
-  )
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Syntax Highlighting in CUDA
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Load CUDA mode so we get syntax highlighting in .cu files
-(use-package cuda-mode
-  :ensure t
-  :mode (("\\.cu\\'" . cuda-mode)
-         ("\\.cuh\\'" . cuda-mode)))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Flyspell Mode for Spelling Corrections
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(use-package flyspell
-  :ensure t
-  :diminish flyspell-mode
-  :hook ((text-mode . flyspell-mode)
-         (prog-mode . flyspell-prog-mode)
-         (org-mode . flyspell-mode))
-  :init
-  (eval-when-compile
-    ;; Silence missing function warnings
-    (declare-function flyspell-goto-next-error "flyspell.el")
-    (declare-function flyspell-mode "flyspell.el")
-    (declare-function flyspell-prog-mode "flyspell.el"))
-  (setq flyspell-issue-welcome-flag nil)
-  (use-package flyspell-correct
-    :ensure t
-    :diminish flyspell-correct-mode
-    :after flyspell)
-  :config
-  (defun flyspell-check-next-highlighted-word ()
-    "Custom function to spell check next highlighted word."
-    (interactive)
-    (flyspell-goto-next-error)
-    (ispell-word))
-
-  (global-set-key (kbd "<f7>") 'flyspell-buffer)
-  (global-set-key (kbd "<f8>") 'flyspell-correct-previous)
-  (global-set-key (kbd "<f9>") 'flyspell-correct-next)
-  )
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Magit
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(use-package magit
-  :ensure t
-  :after (:any ivy selectrum)
-  :commands (magit-checkout)
-  :bind (("M-g M-s" . magit-status)
-         ("M-g M-c" . 'magit-checkout)
-         )
-  :init
-  (use-package dash
-    :ensure t)
-  (use-package forge
-    :ensure t
-    :after magit)
-  :config
-  (when my:use-ivy
-    (setq magit-completing-read-function 'ivy-completing-read))
-  )
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; GitGutter
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(use-package git-gutter
-  :ensure t
-  :diminish git-gutter-mode
-  :defer 2
-  :init
-  (eval-when-compile
-    ;; Silence missing function warnings
-    (declare-function global-git-gutter-mode "git-gutter.el"))
-  :config
-  ;; If you enable global minor mode
-  (global-git-gutter-mode t)
-  ;; Auto update every 5 seconds
-  (custom-set-variables
-   '(git-gutter:update-interval 5))
-
-  ;; Set the foreground color of modified lines to something obvious
-  (set-face-foreground 'git-gutter:modified "purple")
-  )
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; git-timemachine
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(use-package git-timemachine
-  :ensure t
-  :bind (("M-g M-t" . git-timemachine))
-  )
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; gitignore-mode: highlighting in gitignore files
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(use-package gitignore-mode
-  :ensure t
-  :diminish gitignore-mode
-  :mode ("\\.gitignore\\'"))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Use markdown-mode for markdown files
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(use-package markdown-mode
-  :ensure t
-  :mode ("\\.md\\'" "\\.markdown\\'")
-  :config
-  (define-key markdown-mode-map (kbd "M-p") nil)
-  (define-key markdown-mode-map (kbd "M-n") nil))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; auctex
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(use-package tex-site
-  :ensure auctex
-  :mode ("\\.tex\\'" . latex-mode)
-  ;; When we byte-compile we need to have the autoloads loaded in order to
-  ;; properly get auctex working, otherwise auctex is not loaded correctly
-  :init
-  (load "auctex-autoloads" nil t)
-  :config
-  (setq-default TeX-auto-save t
-                TeX-parse-self t
-                TeX-source-correlate-start-server t)
-  (cond
-   ((string-equal system-type "windows-nt") ; Microsoft Windows
-    (progn
-      (message "Windows does not have a PDF viewer set for auctex")))
-   ((string-equal system-type "darwin") ; Mac OS X
-    (setq-default
-     TeX-view-program-list
-     '(("Skim"
-        "/Applications/Skim.app/Contents/SharedSupport/displayline -b -g %n %o %b")
-       )
-     TeX-view-program-selection '((output-pdf "Skim"))))
-   ((string-equal system-type "gnu/linux") ; linux
-    (setq-default TeX-view-program-list
-                  '(("Evince" "evince --page-index=%(outpage) %o"))
-                  TeX-view-program-selection '((output-pdf "Evince")))))
-  (add-hook 'LaTeX-mode-hook 'TeX-source-correlate-mode)
-  (add-hook 'LaTeX-mode-hook 'auto-fill-mode)
-  (add-hook 'LaTeX-mode-hook 'flyspell-mode)
-  (add-hook 'LaTeX-mode-hook 'flyspell-buffer)
-  (add-hook 'LaTeX-mode-hook 'turn-on-reftex)
-  (setq-default reftex-plug-into-AUCTeX t)
-  )
-
 ;; I don't care to see the splash screen
 (setq inhibit-splash-screen t)
 
@@ -886,7 +448,7 @@
 ;; Set default window size and position
 (setq default-frame-alist
       '((top . 0) (left . 0) ;; position
-        (width . 110) (height . 90) ;; size
+        (width . 110) (height . 45) ;; size
         ))
 ; display line and column numbers
 (global-display-line-numbers-mode)
@@ -979,21 +541,7 @@
 ;; Call the header line update
 (add-hook 'buffer-list-update-hook 'sl/display-header)
 
-
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (provide '.emacs)
 ;;; .emacs ends here
 
-(custom-set-variables
- ;; custom-set-variables was added by Custom.
- ;; If you edit it by hand, you could mess it up, so be careful.
- ;; Your init file should contain only one such instance.
- ;; If there is more than one, they won't work right.
- '(package-selected-packages
-   (quote
-    (ess zzz-to-char yasnippet-snippets yapfify yaml-mode ws-butler writegood-mode window-numbering which-key web-mode vlf visual-regexp-steroids use-package-hydra string-inflection spacemacs-theme sourcerer-theme smart-hungry-delete skewer-mode selectrum-prescient rust-mode rg realgud rainbow-delimiters powerline pinentry origami multiple-cursors modern-cpp-font-lock lua-mode lsp-ui lsp-ivy json-mode ivy-prescient hydra hungry-delete google-c-style gitignore-mode git-timemachine git-gutter ggtags forge flyspell-correct-ivy flycheck-ycmd flycheck-rust flycheck-pyflakes evil-dvorak evil-collection esup elpy ein edit-server doom-themes diminish cuda-mode ctrlf counsel-projectile counsel-etags company-ycmd company-prescient company-lsp company-box cmake-font-lock clang-format beacon autopair auto-package-update auctex all-the-icons))))
-(custom-set-faces
- ;; custom-set-faces was added by Custom.
- ;; If you edit it by hand, you could mess it up, so be careful.
- ;; Your init file should contain only one such instance.
- ;; If there is more than one, they won't work right.
- '(which-func ((t (:foreground "#8fb28f")))))
