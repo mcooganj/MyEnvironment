@@ -1,7 +1,17 @@
-;;; initfile --- Summary:
-;;; Commentary:
-;; Emacs 25.1 and newer tested
-;;; Code:
+;;; .emacs file
+;;; Commentary: trimmed down from the larger .emacs
+;;; tested on Emacs 26.3
+;;; date: 2020-06-03
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; emacs setup
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; 1/ download emacs from https://www.gnu.org/software/emacs/download.html
+;; install this into ~/emacs/emacs-26.3-x86_64 ...
+;; 2/ download gnutls from https://sourceforge.net/projects/ezwinports/files/
+;; extract gnutls into ~/emacs/emacs-26.3-x86_64 .../
+;; this will (hopefully) improve the connection between emacs and elpa repos
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Configuration/Customization:
