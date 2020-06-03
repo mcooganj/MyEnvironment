@@ -37,14 +37,25 @@
   '(markdown-mode ein:notebook-multilang-mode))
 
 ;; Set font size. Font size is set to my:font-size/10
-(defvar my:font-size 120)
+(defvar my:font-size 125)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; By default Emacs triggers garbage collection at ~0.8MB which makes
+;; startup really slow. Since most systems have at least 128MB of memory,
+;; we increase it during initialization.
+(setq gc-cons-threshold 128000000)
+(add-hook 'after-init-hook #'(lambda ()
+                               ;; restore after startup
+                               (setq gc-cons-threshold 64000000)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Set packages to install
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (setq package-archives '(
+			 ("melpa-stable" . "https://stable.melpa.org/packages/")
                          ("melpa" . "http://melpa.org/packages/")
-                         ("gnu" . "http://elpa.gnu.org/packages/")))
+                         ("gnu" . "http://elpa.gnu.org/packages/"))
+)
 ;; Disable package initialize after us.  We either initialize it
 ;; anyway in case of interpreted .emacs, or we don't want slow
 ;; initizlization in case of byte-compiled .emacs.elc.
@@ -77,14 +88,6 @@
                                 nil))
                           load-path))))))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; By default Emacs triggers garbage collection at ~0.8MB which makes
-;; startup really slow. Since most systems have at least 128MB of memory,
-;; we increase it during initialization.
-(setq gc-cons-threshold 128000000)
-(add-hook 'after-init-hook #'(lambda ()
-                               ;; restore after startup
-                               (setq gc-cons-threshold 64000000)))
 
 ;; Extra plugins and config files are stored here
 (if (not (file-directory-p "~/.emacs.d/plugins/"))
@@ -174,6 +177,34 @@
 (use-package use-package
   :commands use-package-autoload-keymap)
 
+;; Change tab key behavior to insert spaces instead
+(setq-default indent-tabs-mode nil)
+
+;; Set the number of spaces that the tab key inserts (usually 2 or 4)
+(setq c-basic-offset 2)
+;; Set the size that a tab CHARACTER is interpreted as
+;; (unnecessary if there are no tab characters in the file!)
+(setq tab-width 2)
+
+(global-set-key "\M- " 'hippie-expand)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; load packages
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; async - library for async/thread processing
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(use-package async
+  :ensure t)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; s is used by origami, etc and sometimes during Emacs
+;; upgrades disappears so we try to install it on its own.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(use-package s
+  :ensure t)
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; download emacs doom themes & activate doom-vibrant
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -244,8 +275,6 @@
  :config
  (setq ess-eval-visibly 'nowait) ; emacs continues while R executes
  (setq ess-use-company 'script-only)
- ;; (setq ess-display-help-in-browser nil)
- ;; (setq ess-help-own-frame 'one)
  )
 
 (dolist (map (list ess-mode-map inferior-ess-mode-map))
@@ -350,22 +379,6 @@
   (setq ws-butler-global-exempt-modes my:ws-butler-global-exempt-modes)
   (ws-butler-global-mode 1))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; all-the-icons
-;;
-;; Used by company-box and some themes
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(use-package all-the-icons
-  :ensure t)
-
-;; Change tab key behavior to insert spaces instead
-(setq-default indent-tabs-mode nil)
-
-;; Set the number of spaces that the tab key inserts (usually 2 or 4)
-(setq c-basic-offset 2)
-;; Set the size that a tab CHARACTER is interpreted as
-;; (unnecessary if there are no tab characters in the file!)
-(setq tab-width 2)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Set up code completion with company
@@ -402,14 +415,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Select search backend
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defvar my:use-ivy nil)
+(defvar my:use-ivy nil) ; TODO: remove all the ivy-checks
 (defvar my:use-selectrum t)
-(if (string-match "ivy" my:search-backend)
-    (setq my:use-ivy t)
-  (if (string-match "selectrum" my:search-backend)
-      (setq my:use-selectrum t)
-    (warn "my:search-backend must be to 'ivy' or 'selectrum'")
-    ))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Selectrum config
@@ -436,6 +443,204 @@
     (ctrlf-mode t))
   )
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Configure flycheck
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Note: For C++ we use flycheck with LSP mode
+(use-package flycheck
+  :ensure t
+  :diminish flycheck-mode
+  :defer t
+  :init
+  (eval-when-compile
+    ;; Silence missing function warnings
+    (declare-function global-flycheck-mode "flycheck.el"))
+  :config
+  ;; Turn flycheck on everywhere
+  (global-flycheck-mode t)
+  ;; There are issues with company mode and flycheck in terminal mode.
+  ;; This is outlined at:
+  ;; https://github.com/abingham/emacs-ycmd
+  (when (not (display-graphic-p))
+    (setq flycheck-indication-mode nil))
+  )
+(use-package flycheck-pyflakes
+  :ensure t
+  :after python)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Use undo-tree to navigate undo history
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(use-package undo-tree
+  :ensure t
+  :diminish undo-tree-mode
+  :defer 1
+  :config
+  (eval-when-compile
+    ;; Silence missing function warnings
+    (declare-function global-undo-tree-mode "undo-tree.el"))
+  (global-undo-tree-mode))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Org-Mode
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(setq org-log-done 'time
+      org-todo-keywords '((sequence "TODO" "INPROGRESS" "DONE"))
+      org-todo-keyword-faces '(("INPROGRESS" .
+                                (:foreground "blue" :weight bold))))
+(use-package writegood-mode
+  :ensure t
+  :init
+  (eval-when-compile
+    ;; Silence missing function warnings
+    (declare-function writegood-mode "writegood-mode.el"))
+  (add-hook 'org-mode-hook #'writegood-mode)
+  )
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Autopair
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Automatically at closing brace, bracket and quote
+(use-package autopair
+  :ensure t
+  :diminish autopair-mode
+  :init
+  (eval-when-compile
+    ;; Silence missing function warnings
+    (declare-function autopair-global-mode "autopair.el"))
+  :config
+  (autopair-global-mode t)
+  )
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Magit
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(use-package magit
+  :ensure t
+  :after (:any ivy selectrum)
+  :commands (magit-checkout)
+  :bind (("M-g M-s" . magit-status)
+         ("M-g M-c" . 'magit-checkout)
+         )
+  :init
+  (use-package dash
+    :ensure t)
+  (use-package forge
+    :ensure t
+    :after magit)
+  :config
+  )
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; GitGutter
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(use-package git-gutter
+  :ensure t
+  :diminish git-gutter-mode
+  :defer 2
+  :init
+  (eval-when-compile
+    ;; Silence missing function warnings
+    (declare-function global-git-gutter-mode "git-gutter.el"))
+  :config
+  ;; If you enable global minor mode
+  (global-git-gutter-mode t)
+  ;; Auto update every 5 seconds
+  (custom-set-variables
+   '(git-gutter:update-interval 5))
+
+  ;; Set the foreground color of modified lines to something obvious
+  (set-face-foreground 'git-gutter:modified "purple")
+  )
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; git-timemachine
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(use-package git-timemachine
+  :ensure t
+  :bind (("M-g M-t" . git-timemachine))
+  )
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; gitignore-mode: highlighting in gitignore files
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(use-package gitignore-mode
+  :ensure t
+  :diminish gitignore-mode
+  :mode ("\\.gitignore\\'"))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Origami - Does code folding, ie hide the body of an
+;; if/else/for/function so that you can fit more code on your screen
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(use-package origami
+  :ensure t
+  :commands (origami-mode)
+  :bind (:map origami-mode-map
+              ("C-c o :" . origami-recursively-toggle-node)
+              ("C-c o a" . origami-toggle-all-nodes)
+              ("C-c o t" . origami-toggle-node)
+              ("C-c o o" . origami-show-only-node)
+              ("C-c o u" . origami-undo)
+              ("C-c o U" . origami-redo)
+              ("C-c o C-r" . origami-reset)
+              )
+  :config
+  (setq origami-show-fold-header t)
+  ;; The python parser currently doesn't fold if/for/etc. blocks, which is
+  ;; something we want. However, the basic indentation parser does support
+  ;; this with one caveat: you must toggle the node when your cursor is on
+  ;; the line of the if/for/etc. statement you want to collapse. You cannot
+  ;; fold the statement by toggling in the body of the if/for/etc.
+  (add-to-list 'origami-parser-alist '(python-mode . origami-indent-parser))
+  :init
+  (add-hook 'prog-mode-hook 'origami-mode)
+  )
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Rainbow Delimiters -  have delimiters be colored by their depth
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(use-package rainbow-delimiters
+  :ensure t
+  :init
+  (eval-when-compile
+    ;; Silence missing function warnings
+    (declare-function rainbow-delimiters-mode "rainbow-delimiters.el"))
+  (add-hook 'prog-mode-hook #'rainbow-delimiters-mode))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Beacon-mode: flash the cursor when switching buffers or scrolling
+;;              the goal is to make it easy to find the cursor
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(use-package beacon
+  :ensure t
+  :diminish beacon-mode
+  :init
+  (eval-when-compile
+    ;; Silence missing function warnings
+    (declare-function beacon-mode "beacon.el"))
+  :config
+  (beacon-mode t))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; which-key: when you pause on a keyboard shortcut it provides
+;;            suggestions in a popup buffer
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(use-package which-key
+  :ensure t
+  :diminish which-key-mode
+  :init
+  (eval-when-compile
+    ;; Silence missing function warnings
+    (declare-function which-key-mode "which-key.el"))
+  :config
+  (which-key-mode))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; end packages section
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
 ;; I don't care to see the splash screen
 (setq inhibit-splash-screen t)
 
@@ -460,10 +665,10 @@
 (when (not indicate-empty-lines)
   (toggle-indicate-empty-lines))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Enable which function mode and set the header line to display both the
 ;; path and the function we're in
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (which-function-mode t)
 
 ;; Remove function from mode bar
@@ -545,3 +750,18 @@
 (provide '.emacs)
 ;;; .emacs ends here
 
+(custom-set-variables
+ ;; custom-set-variables was added by Custom.
+ ;; If you edit it by hand, you could mess it up, so be careful.
+ ;; Your init file should contain only one such instance.
+ ;; If there is more than one, they won't work right.
+ '(git-gutter:update-interval 5)
+ '(package-selected-packages
+   (quote
+    (company-box ctrlf selectrum-prescient selectrum company-prescient company all-the-icons ws-butler diminish auto-package-update ess evil-collection powerline evil doom-themes use-package))))
+(custom-set-faces
+ ;; custom-set-faces was added by Custom.
+ ;; If you edit it by hand, you could mess it up, so be careful.
+ ;; Your init file should contain only one such instance.
+ ;; If there is more than one, they won't work right.
+ '(which-func ((t (:foreground "#8fb28f")))))
